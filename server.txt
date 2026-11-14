@@ -1,1 +1,1 @@
-wss://transcript-trades-bookstore-tracks.trycloudflare.com
+wss://talk-med-transform-explicit.trycloudflare.com
