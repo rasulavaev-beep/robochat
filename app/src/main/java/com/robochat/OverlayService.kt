@@ -33,29 +33,40 @@ class OverlayService : Service() {
   @Volatile var authFail = false
   var shown = false
   var built = false
-  var url = ""
-  var key = ""
-  var room = ""
-  var nick = ""
+  var nick = "Игрок"
+  val KEY = "rdegt3u836"
+  val SRC = "https://raw.githubusercontent.com/rasulavaev-beep/robochat/main/server.txt"
 
   override fun onBind(i: Intent?): IBinder? = null
   fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
   fun btn(t: String, a: () -> Unit) = Button(this).apply { text = t; setOnClickListener { a() } }
 
   override fun onStartCommand(i: Intent?, f: Int, id: Int): Int {
-    if (i == null) { stopSelf(); return START_NOT_STICKY }
-    url = i.getStringExtra("url") ?: ""
-    key = i.getStringExtra("key") ?: ""
-    room = i.getStringExtra("room") ?: ""
-    nick = i.getStringExtra("nick") ?: "anon"
-    if (!built) { built = true; startFg(); buildUi() }
+    try {
+      if (!built) {
+        built = true
+        startFg()
+        val sp = getSharedPreferences("rc", MODE_PRIVATE)
+        nick = sp.getString("nick", null) ?: ("Игрок" + (100..999).random())
+        sp.edit().putString("nick", nick).apply()
+        buildUi()
+        addLine("Ник: $nick (сменить: /nick Имя)")
+      }
+      reconnect()
+    } catch (e: Throwable) {
+      Toast.makeText(applicationContext, "Ошибка: $e", Toast.LENGTH_LONG).show()
+      stopSelf()
+    }
+    return START_STICKY
+  }
+
+  fun reconnect() {
     gen++
     val old = ws
     ws = null
     old?.cancel()
     authFail = false
     connect()
-    return START_NOT_STICKY
   }
 
   fun startFg() {
@@ -105,7 +116,15 @@ class OverlayService : Service() {
     row.addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
     row.addView(btn("➤") {
       val t = input.text.toString().trim()
-      if (t.isNotEmpty()) { ws?.send(JSONObject().put("m", t).toString()); input.setText("") }
+      input.setText("")
+      if (t.startsWith("/nick ")) {
+        nick = t.substring(6).trim().take(20).ifEmpty { nick }
+        getSharedPreferences("rc", MODE_PRIVATE).edit().putString("nick", nick).apply()
+        addLine("Ник: $nick")
+        reconnect()
+      } else if (t.isNotEmpty()) {
+        ws?.send(JSONObject().put("m", t).toString())
+      }
     }, LinearLayout.LayoutParams(dp(56), dp(48)))
     panel.addView(top)
     panel.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -131,17 +150,29 @@ class OverlayService : Service() {
   fun connect() {
     if (stopped) return
     val my = ++gen
-    val req = try { Request.Builder().url(url).build() } catch (e: Exception) { addLine("! неверный адрес сервера"); return }
+    Thread {
+      var u: String? = null
+      try {
+        val r = Request.Builder().url(SRC + "?t=" + System.currentTimeMillis()).build()
+        client.newCall(r).execute().use { resp -> if (resp.isSuccessful) u = resp.body?.string()?.trim() }
+      } catch (e: Exception) {}
+      ui.post { if (!stopped && my == gen) open(u, my) }
+    }.start()
+  }
+
+  fun open(u: String?, my: Int) {
+    if (u == null || !u.startsWith("ws")) { addLine("… сервер не найден, повтор"); retry(my); return }
+    val req = try { Request.Builder().url(u).build() } catch (e: Exception) { addLine("! неверный адрес сервера"); retry(my); return }
     ws = client.newWebSocket(req, object : WebSocketListener() {
       override fun onOpen(w: WebSocket, r: Response) {
-        w.send(JSONObject().put("key", key).put("room", room).put("name", nick).toString())
+        w.send(JSONObject().put("key", KEY).put("room", "all").put("name", nick).toString())
       }
       override fun onMessage(w: WebSocket, text: String) {
         if (my != gen) return
         try {
           val d = JSONObject(text)
           when (d.getString("t")) {
-            "ok" -> addLine("✓ комната $room, онлайн: ${d.getInt("online")}")
+            "ok" -> addLine("✓ чат подключён, онлайн: ${d.getInt("online")}")
             "msg" -> { addLine("[" + d.getString("n") + "] " + d.getString("m")); ui.post { if (!shown) bubble.text = "💬!" } }
             "err" -> {
               if (d.getString("m") == "auth") { authFail = true; addLine("! неверный ключ сервера") } else addLine("! " + d.getString("m"))
@@ -158,8 +189,8 @@ class OverlayService : Service() {
     ui.post {
       if (stopped || authFail || my != gen) return@post
       gen++
-      addLine("… нет связи, повтор через 3 с")
-      ui.postDelayed({ connect() }, 3000)
+      addLine("… нет связи, повтор через 5 с")
+      ui.postDelayed({ connect() }, 5000)
     }
   }
 
