@@ -1,0 +1,4 @@
+адрес локально : wss://df9523fa17ee7ee5-31-76-51-107.serveousercontent.com
+адрес на GitHub: wss://df9523fa17ee7ee5-31-76-51-107.serveousercontent.com
+PASS локальный сервер {'t': 'ok', 'online': 1}
+PASS через туннель {'t': 'ok', 'online': 1}

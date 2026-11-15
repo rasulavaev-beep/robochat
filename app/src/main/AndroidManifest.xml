@@ -3,7 +3,7 @@
 <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-<application android:label="RoboChat" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+<application android:label="RoboChat" android:icon="@mipmap/ic_launcher" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 <activity android:name=".MainActivity" android:exported="true">
 <intent-filter>
 <action android:name="android.intent.action.MAIN"/>
