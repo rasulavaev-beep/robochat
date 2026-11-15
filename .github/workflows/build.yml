@@ -3,6 +3,7 @@ on:
   push:
     paths-ignore:
       - server.txt
+      - servers.txt
   workflow_dispatch:
 permissions:
   contents: write

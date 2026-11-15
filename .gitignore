@@ -1,1 +1,4 @@
 server.key
+*.log
+new.txt
+check.out

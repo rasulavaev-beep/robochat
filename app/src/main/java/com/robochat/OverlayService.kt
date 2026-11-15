@@ -33,7 +33,7 @@ class OverlayService : Service() {
   lateinit var bLp: WindowManager.LayoutParams
   lateinit var pLp: WindowManager.LayoutParams
   val ui = Handler(Looper.getMainLooper())
-  val client = OkHttpClient.Builder().pingInterval(25, TimeUnit.SECONDS).build()
+  val client = OkHttpClient.Builder().pingInterval(25, TimeUnit.SECONDS).connectTimeout(7, TimeUnit.SECONDS).build()
   var ws: WebSocket? = null
   @Volatile var gen = 0
   @Volatile var stopped = false
@@ -42,7 +42,7 @@ class OverlayService : Service() {
   var built = false
   var nick = "Игрок"
   val KEY = "rdegt3u836"
-  val SRC = "https://raw.githubusercontent.com/rasulavaev-beep/robochat/main/server.txt"
+  val SRC = "https://raw.githubusercontent.com/rasulavaev-beep/robochat/main/servers.txt"
   val F = Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
 
   override fun onBind(i: Intent?): IBinder? = null
@@ -249,21 +249,27 @@ class OverlayService : Service() {
     addSpan(t)
   }
 
+  var urls: List<String> = emptyList()
+  var ix = 0
+
   fun connect() {
     if (stopped) return
     val my = ++gen
     Thread {
-      var u: String? = null
+      var list: List<String> = emptyList()
       try {
         val r = Request.Builder().url(SRC + "?t=" + System.currentTimeMillis()).build()
-        client.newCall(r).execute().use { resp -> if (resp.isSuccessful) u = resp.body?.string()?.trim() }
+        client.newCall(r).execute().use { resp ->
+          if (resp.isSuccessful) list = (resp.body?.string() ?: "").lines().map { it.trim() }.filter { it.startsWith("ws") }
+        }
       } catch (e: Exception) {}
-      ui.post { if (!stopped && my == gen) open(u, my) }
+      ui.post { if (!stopped && my == gen) { urls = list; ix = 0; open(my) } }
     }.start()
   }
 
-  fun open(u: String?, my: Int) {
-    if (u == null || !u.startsWith("ws")) { addLine("… сервер не найден, повтор"); retry(my); return }
+  fun open(my: Int) {
+    if (urls.isEmpty()) { addLine("… сервер не найден, повтор"); retry(my); return }
+    val u = urls[ix % urls.size]
     val req = try { Request.Builder().url(u).build() } catch (e: Exception) { addLine("! неверный адрес сервера", C.RED); retry(my); return }
     ws = client.newWebSocket(req, object : WebSocketListener() {
       override fun onOpen(w: WebSocket, r: Response) {
@@ -290,10 +296,16 @@ class OverlayService : Service() {
   fun retry(my: Int) {
     ui.post {
       if (stopped || authFail || my != gen) return@post
-      gen++
-      addLine("… нет связи, повтор через 5 с")
+      val g = ++gen
+      ix++
       setStatus("○ нет связи", C.DIM)
-      ui.postDelayed({ connect() }, 5000)
+      if (ix < urls.size) {
+        addLine("… другой канал (" + (ix + 1) + "/" + urls.size + ")")
+        ui.postDelayed({ if (!stopped && g == gen) open(g) }, 700)
+      } else {
+        addLine("… нет связи, повтор через 5 с")
+        ui.postDelayed({ if (!stopped && g == gen) connect() }, 5000)
+      }
     }
   }
 
